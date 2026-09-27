@@ -1,5 +1,6 @@
 import datetime
 import math
+import re
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -169,8 +170,10 @@ presets = {
 }
 
 preset_choice = st.sidebar.selectbox("プリセットから選択", list(presets.keys()))
-default_lat, default_lon = presets[preset_choice]
+lat, lon = presets[preset_choice]
+location_title = preset_choice
 
+# 1. 地名・スポット検索
 st.sidebar.markdown("---")
 search_query = st.sidebar.text_input("🔍 地名・スポット名検索（例: 松江）")
 
@@ -178,20 +181,46 @@ if search_query:
     s_lat, s_lon, s_name = geocode_location(search_query)
     if s_lat is not None:
         lat, lon = s_lat, s_lon
+        location_title = f"検索: {s_name}"
         st.sidebar.success(f"「{s_name}」を取得しました")
     else:
         st.sidebar.error("見つかりませんでした")
-        lat, lon = default_lat, default_lon
-else:
-    lat, lon = default_lat, default_lon
 
+# 2. Google Map 座標貼り付け欄
 st.sidebar.markdown("---")
-lat = st.sidebar.number_input("緯度 (Lat)", value=float(lat), format="%.4f")
-lon = st.sidebar.number_input("経度 (Lon)", value=float(lon), format="%.4f")
+map_coord_input = st.sidebar.text_input(
+    "📌 Google Map座標ペースト",
+    placeholder="35.6336, 133.1303",
+    help="Google Maps等からコピーした「緯度, 経度」の文字列をそのまま貼り付けできます",
+)
+
+if map_coord_input:
+    # 数値（小数含む）のペアを抽出
+    coords = re.findall(r"[-+]?\d*\.\d+|\d+", map_coord_input)
+    if len(coords) >= 2:
+        try:
+            parsed_lat = float(coords[0])
+            parsed_lon = float(coords[1])
+            lat, lon = parsed_lat, parsed_lon
+            location_title = f"指定座標 ({lat:.4f}, {lon:.4f})"
+            st.sidebar.success(
+                f"座標を取得しました\n(Lat: {lat:.4f}, Lon: {lon:.4f})"
+            )
+        except ValueError:
+            st.sidebar.error("座標の解析に失敗しました")
+    else:
+        st.sidebar.error("「緯度, 経度」の形式で入力してください")
+
+# 3. 緯度・経度の個別数値入力欄
+st.sidebar.markdown("---")
+lat = st.sidebar.number_input("緯度 (Lat)", value=float(lat), format="%.6f")
+lon = st.sidebar.number_input("経度 (Lon)", value=float(lon), format="%.6f")
 
 # メインコンテンツ
 st.title("🎣 天気予報＆海況ダッシュボード")
-st.caption(f"現在の参照位置: **{preset_choice}** (緯度: {lat:.4f}, 経度: {lon:.4f})")
+st.caption(
+    f"現在の参照位置: **{location_title}** (緯度: {lat:.6f}, 経度: {lon:.6f})"
+)
 
 data = fetch_weather_data(lat, lon)
 
@@ -264,7 +293,7 @@ if "daily" in data and "hourly" in data:
 
     sel_dt = datetime.datetime.strptime(selected_date_str, "%Y-%m-%d")
 
-    # グラフ上部用タイトル（重ねず外に出す）
+    # グラフ上部用タイトル
     st.markdown(f"**{sel_dt.strftime('%m/%d')} 風速・潮位推移（上部: 風向）**")
 
     df_selected = df_hourly[
@@ -308,7 +337,6 @@ if "daily" in data and "hourly" in data:
         if max(df_selected["wind_speed"]) > 0
         else 5
     )
-    # 矢印の位置調整（Y軸最大値の上に少し余裕を持たせる）
     arrow_y = max_wind * 1.15 + 0.3
 
     for idx_r, row in df_selected.iterrows():
@@ -322,7 +350,7 @@ if "daily" in data and "hourly" in data:
             yref="y1",
         )
 
-    # レイアウト設定（マージン確保・凡例の位置調整・ズーム固定）
+    # レイアウト設定
     fig.update_layout(
         hovermode="x unified",
         legend=dict(
@@ -332,7 +360,7 @@ if "daily" in data and "hourly" in data:
         height=380,
     )
 
-    # 軸の設定（fixedrange=True で誤タップによるズーム・スクロールずれを完全にブロック）
+    # 軸の設定
     fig.update_xaxes(
         title_text="時刻",
         fixedrange=True,
@@ -342,21 +370,20 @@ if "daily" in data and "hourly" in data:
         title_text="風速(m/s)",
         secondary_y=False,
         fixedrange=True,
-        range=[0, max_wind * 1.35],  # 矢印が入る高さをしっかり固定
+        range=[0, max_wind * 1.35],
         gridcolor="rgba(128,128,128,0.2)",
     )
     fig.update_yaxes(
         title_text="潮位(cm)", secondary_y=True, fixedrange=True, showgrid=False
     )
 
-    # configで静的化・インタラクション制御
     st.plotly_chart(
         fig,
         use_container_width=True,
         config={
-            "displayModeBar": False,  # モードバー非表示
-            "scrollZoom": False,  # スクロールズーム無効
-            "doubleClick": "reset",  # ダブルクリックでリセット
+            "displayModeBar": False,
+            "scrollZoom": False,
+            "doubleClick": "reset",
         },
     )
 
