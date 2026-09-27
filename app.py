@@ -105,7 +105,7 @@ def weather_code_to_icon(code):
 
 
 def fetch_weather_data(lat, lon):
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weather_code,wind_speed_10m_max,wind_direction_10m_dominant&hourly=wind_speed_10m,wind_direction_10m&timezone=Asia%2FTokyo"
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weathercode&hourly=windspeed_10m,winddirection_10m&timezone=Asia%2FTokyo"
     res = requests.get(url)
     return res.json()
 
@@ -164,6 +164,16 @@ data = fetch_weather_data(lat, lon)
 if "daily" in data and "hourly" in data:
     daily = data["daily"]
     dates = daily["time"]
+    hourly = data["hourly"]
+
+    # 時間データからデータフレームを作成
+    df_hourly = pd.DataFrame(
+        {
+            "time": hourly["time"],
+            "wind_speed": [round(s / 3.6, 1) for s in hourly["windspeed_10m"]],
+            "wind_dir": hourly["winddirection_10m"],
+        }
+    )
 
     st.subheader("🗓️ 向こう1週間の概況（👈左右スワイプでスクロール）")
 
@@ -196,11 +206,18 @@ if "daily" in data and "hourly" in data:
         dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
         display_date = dt.strftime("%m/%d(%a)")
 
-        w_code = daily["weather_code"][idx]
+        w_code = daily["weathercode"][idx]
         w_icon = weather_code_to_icon(w_code)
-        w_speed = round(daily["wind_speed_10m_max"][idx] / 3.6, 1)
-        w_deg = daily["wind_direction_10m_dominant"][idx]
-        w_arrow = wind_degree_to_arrow(w_deg)
+
+        # 該当日の平均/最大風速を算出
+        df_day = df_hourly[df_hourly["time"].str.startswith(date_str)]
+        if not df_day.empty:
+            w_speed = df_day["wind_speed"].max()
+            w_deg = df_day["wind_dir"].mean()
+            w_arrow = wind_degree_to_arrow(w_deg)
+        else:
+            w_speed = 0.0
+            w_arrow = "↑"
 
         mega_moon, emoji, tide_name, _ = get_moon_phase_and_tide_name(dt)
         high_tide, low_tide = get_tide_times(dt, lon)
@@ -231,15 +248,6 @@ if "daily" in data and "hourly" in data:
         format_func=lambda x: datetime.datetime.strptime(
             x, "%Y-%m-%d"
         ).strftime("%m/%d (%a)"),
-    )
-
-    hourly = data["hourly"]
-    df_hourly = pd.DataFrame(
-        {
-            "time": hourly["time"],
-            "wind_speed": [round(s / 3.6, 1) for s in hourly["wind_speed_10m"]],
-            "wind_dir": hourly["wind_direction_10m"],
-        }
     )
 
     df_selected = df_hourly[
@@ -290,7 +298,7 @@ if "daily" in data and "hourly" in data:
             y=max_wind * 1.1 + 0.2,
             text=f"<b>{row['arrow']}</b>",
             showarrow=False,
-            font=dict(size=14, color="#FFD700"),  # 黄色で浮き立たせる
+            font=dict(size=14, color="#FFD700"),
             xref="x",
             yref="y1",
         )
@@ -305,7 +313,7 @@ if "daily" in data and "hourly" in data:
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
         ),
-        margin=dict(l=5, r=5, t=50, b=10),  # 余白を限界まで詰めてスマホ全域を活用
+        margin=dict(l=5, r=5, t=50, b=10),
         height=380,
     )
 
