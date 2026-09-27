@@ -166,7 +166,6 @@ if "daily" in data and "hourly" in data:
     dates = daily["time"]
     hourly = data["hourly"]
 
-    # 時間データからデータフレームを作成
     df_hourly = pd.DataFrame(
         {
             "time": hourly["time"],
@@ -175,32 +174,10 @@ if "daily" in data and "hourly" in data:
         }
     )
 
-    st.subheader("🗓️ 向こう1週間の概況（👈左右スワイプでスクロール）")
+    st.subheader("🗓️ 向こう1週間の概況")
 
-    # 横スクロールコンテナ用CSS
-    scroll_html = """
-    <style>
-    .scroll-container {
-        display: flex;
-        overflow-x: auto;
-        gap: 12px;
-        padding-bottom: 12px;
-        -webkit-overflow-scrolling: touch;
-    }
-    .card {
-        min-width: 150px;
-        max-width: 150px;
-        background-color: rgba(128, 128, 128, 0.15);
-        border-radius: 10px;
-        padding: 12px;
-        border: 1px solid rgba(128, 128, 128, 0.3);
-        flex-shrink: 0;
-    }
-    .card h4 { margin: 0 0 8px 0; font-size: 1.1rem; }
-    .card p { margin: 4px 0; font-size: 0.85rem; line-height: 1.3; }
-    </style>
-    <div class="scroll-container">
-    """
+    # st.columnsで安全に横並びカードを生成
+    cols = st.columns(len(dates))
 
     for idx, date_str in enumerate(dates):
         dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
@@ -209,7 +186,6 @@ if "daily" in data and "hourly" in data:
         w_code = daily["weathercode"][idx]
         w_icon = weather_code_to_icon(w_code)
 
-        # 該当日の平均/最大風速を算出
         df_day = df_hourly[df_hourly["time"].str.startswith(date_str)]
         if not df_day.empty:
             w_speed = df_day["wind_speed"].max()
@@ -222,20 +198,15 @@ if "daily" in data and "hourly" in data:
         mega_moon, emoji, tide_name, _ = get_moon_phase_and_tide_name(dt)
         high_tide, low_tide = get_tide_times(dt, lon)
 
-        scroll_html += f"""
-        <div class="card">
-            <h4>{display_date}</h4>
-            <p>{w_icon}</p>
-            <p><b>風:</b> {w_arrow} {w_speed}m/s</p>
-            <p><b>月:</b> {mega_moon} {emoji}</p>
-            <p><b>潮:</b> {tide_name}</p>
-            <p style="color: #ff4b4b; margin-top:6px;">🔺 {high_tide}</p>
-            <p style="color: #1c83e1;">🔻 {low_tide}</p>
-        </div>
-        """
-
-    scroll_html += "</div>"
-    st.markdown(scroll_html, unsafe_allow_html=True)
+        with cols[idx]:
+            with st.container(border=True):
+                st.markdown(f"#### {display_date}")
+                st.markdown(f"{w_icon}")
+                st.markdown(f"**風:** {w_arrow} {w_speed}m/s")
+                st.markdown(f"**月:** {mega_moon} {emoji}")
+                st.markdown(f"**潮:** {tide_name}")
+                st.markdown(f"🔺 :red[{high_tide}]")
+                st.markdown(f"🔻 :blue[{low_tide}]")
 
     st.divider()
 
@@ -292,7 +263,7 @@ if "daily" in data and "hourly" in data:
         if max(df_selected["wind_speed"]) > 0
         else 5
     )
-    for idx, row in df_selected.iterrows():
+    for idx_r, row in df_selected.iterrows():
         fig.add_annotation(
             x=row["hour"],
             y=max_wind * 1.1 + 0.2,
