@@ -27,7 +27,7 @@ def get_moon_phase_and_tide_name(date_obj):
     emojis = ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"]
     emoji = emojis[int((age / synodic_month) * 8) % 8]
 
-    # 潮回り判定（月齢ベースの目安）
+    # 潮回り判定
     a = round(age, 1)
     if (a >= 28.5 or a < 2.5) or (13.8 <= a < 17.5):
         tide_name = "大潮"
@@ -124,6 +124,40 @@ st.set_page_config(
     page_title="天気予報＆海況ダッシュボード", layout="wide", page_icon="🎣"
 )
 
+# スマホ向け横スクロールCSSの挿入
+st.markdown(
+    """
+    <style>
+    .scroll-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 12px;
+        padding-bottom: 12px;
+        -webkit-overflow-scrolling: touch;
+    }
+    .scroll-card {
+        min-width: 145px;
+        max-width: 145px;
+        flex: 0 0 auto;
+        background-color: rgba(128, 128, 128, 0.12);
+        border: 1px solid rgba(128, 128, 128, 0.3);
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 0.88rem;
+    }
+    .scroll-card h4 {
+        margin: 0 0 8px 0;
+        font-size: 1.05rem;
+    }
+    .scroll-card p {
+        margin: 4px 0;
+        line-height: 1.3;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
 # サイドバー設定
 st.sidebar.header("📍 参照位置の設定")
 presets = {
@@ -174,11 +208,10 @@ if "daily" in data and "hourly" in data:
         }
     )
 
-    st.subheader("🗓️ 向こう1週間の概況")
+    st.subheader("🗓️ 向こう1週間の概況（👉スワイプでスクロール）")
 
-    # st.columnsで安全に横並びカードを生成
-    cols = st.columns(len(dates))
-
+    # 横スワイプ（カード型）UIの構築
+    cards_list = []
     for idx, date_str in enumerate(dates):
         dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
         display_date = dt.strftime("%m/%d(%a)")
@@ -198,15 +231,23 @@ if "daily" in data and "hourly" in data:
         mega_moon, emoji, tide_name, _ = get_moon_phase_and_tide_name(dt)
         high_tide, low_tide = get_tide_times(dt, lon)
 
-        with cols[idx]:
-            with st.container(border=True):
-                st.markdown(f"#### {display_date}")
-                st.markdown(f"{w_icon}")
-                st.markdown(f"**風:** {w_arrow} {w_speed}m/s")
-                st.markdown(f"**月:** {mega_moon} {emoji}")
-                st.markdown(f"**潮:** {tide_name}")
-                st.markdown(f"🔺 :red[{high_tide}]")
-                st.markdown(f"🔻 :blue[{low_tide}]")
+        card_html = (
+            f'<div class="scroll-card">'
+            f"<h4>{display_date}</h4>"
+            f"<p>{w_icon}</p>"
+            f"<p><b>風:</b> {w_arrow} {w_speed}m/s</p>"
+            f"<p><b>月:</b> {mega_moon} {emoji}</p>"
+            f"<p><b>潮:</b> {tide_name}</p>"
+            f'<p style="color: #ff4b4b; margin-top:6px;">🔺 {high_tide}</p>'
+            f'<p style="color: #1c83e1;">🔻 {low_tide}</p>'
+            f"</div>"
+        )
+        cards_list.append(card_html)
+
+    full_html = (
+        '<div class="scroll-container">' + "".join(cards_list) + "</div>"
+    )
+    st.markdown(full_html, unsafe_allow_html=True)
 
     st.divider()
 
@@ -257,7 +298,7 @@ if "daily" in data and "hourly" in data:
         secondary_y=True,
     )
 
-    # 風向矢印（ダーク/ライト両対応の高コントラスト色：黄色 #FFD700）
+    # 風向矢印（高コントラスト黄色）
     max_wind = (
         max(df_selected["wind_speed"])
         if max(df_selected["wind_speed"]) > 0
