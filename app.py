@@ -262,13 +262,17 @@ if "daily" in data and "hourly" in data:
         ).strftime("%m/%d (%a)"),
     )
 
+    sel_dt = datetime.datetime.strptime(selected_date_str, "%Y-%m-%d")
+
+    # グラフ上部用タイトル（重ねず外に出す）
+    st.markdown(f"**{sel_dt.strftime('%m/%d')} 風速・潮位推移（上部: 風向）**")
+
     df_selected = df_hourly[
         df_hourly["time"].str.startswith(selected_date_str)
     ].copy()
     df_selected["hour"] = df_selected["time"].apply(lambda x: x.split("T")[1])
     df_selected["arrow"] = df_selected["wind_dir"].apply(wind_degree_to_arrow)
 
-    sel_dt = datetime.datetime.strptime(selected_date_str, "%Y-%m-%d")
     tide_data = get_tide_series(sel_dt, lon)
     df_selected["tide"] = tide_data
 
@@ -304,38 +308,56 @@ if "daily" in data and "hourly" in data:
         if max(df_selected["wind_speed"]) > 0
         else 5
     )
+    # 矢印の位置調整（Y軸最大値の上に少し余裕を持たせる）
+    arrow_y = max_wind * 1.15 + 0.3
+
     for idx_r, row in df_selected.iterrows():
         fig.add_annotation(
             x=row["hour"],
-            y=max_wind * 1.1 + 0.2,
+            y=arrow_y,
             text=f"<b>{row['arrow']}</b>",
             showarrow=False,
-            font=dict(size=14, color="#FFD700"),
+            font=dict(size=13, color="#FFD700"),
             xref="x",
             yref="y1",
         )
 
+    # レイアウト設定（マージン確保・凡例の位置調整・ズーム固定）
     fig.update_layout(
-        title=dict(
-            text=f"{sel_dt.strftime('%m/%d')} 風速・潮位推移（上部: 風向）",
-            font=dict(size=14),
-        ),
-        xaxis_title="時刻",
         hovermode="x unified",
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+            orientation="h", yanchor="bottom", y=1.12, xanchor="right", x=1
         ),
-        margin=dict(l=5, r=5, t=50, b=10),
+        margin=dict(l=10, r=10, t=40, b=10),
         height=380,
     )
 
-    fig.update_yaxes(
-        title_text="風速(m/s)", secondary_y=False, gridcolor="rgba(128,128,128,0.2)"
+    # 軸の設定（fixedrange=True で誤タップによるズーム・スクロールずれを完全にブロック）
+    fig.update_xaxes(
+        title_text="時刻",
+        fixedrange=True,
+        gridcolor="rgba(128,128,128,0.2)",
     )
-    fig.update_yaxes(title_text="潮位(cm)", secondary_y=True, showgrid=False)
+    fig.update_yaxes(
+        title_text="風速(m/s)",
+        secondary_y=False,
+        fixedrange=True,
+        range=[0, max_wind * 1.35],  # 矢印が入る高さをしっかり固定
+        gridcolor="rgba(128,128,128,0.2)",
+    )
+    fig.update_yaxes(
+        title_text="潮位(cm)", secondary_y=True, fixedrange=True, showgrid=False
+    )
 
+    # configで静的化・インタラクション制御
     st.plotly_chart(
-        fig, use_container_width=True, config={"displayModeBar": False}
+        fig,
+        use_container_width=True,
+        config={
+            "displayModeBar": False,  # モードバー非表示
+            "scrollZoom": False,  # スクロールズーム無効
+            "doubleClick": "reset",  # ダブルクリックでリセット
+        },
     )
 
 else:
