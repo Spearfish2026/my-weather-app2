@@ -70,7 +70,7 @@ def weather_code_to_icon(code):
     if code in [0]:
         return "☀️ 晴れ"
     elif code in [1, 2]:
-        return "🌤️️ 晴れ/時々曇り"
+        return "🌤 晴れ/時々曇り"
     elif code in [3]:
         return "☁️ 曇り"
     elif code in [45, 48]:
@@ -100,11 +100,9 @@ def estimate_water_temp(daily_temp_max):
 
 # --- APIから気象＆海洋データ取得 ---
 def fetch_weather_and_marine_data(lat, lon):
-    # 気象API（過去の気温と1週間予報を取得）
     weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weather_code,temperature_2m_max,wind_speed_10m_max,wind_direction_10m_dominant&hourly=wind_speed_10m,wind_direction_10m&past_days=3&timezone=Asia%2FTokyo"
     weather_res = requests.get(weather_url).json()
 
-    # 海洋API（一応取得を試みる）
     marine_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&daily=sea_water_temperature_max,wave_height_max&hourly=wave_height,wave_direction&timezone=Asia%2FTokyo"
     try:
         marine_res = requests.get(marine_url).json()
@@ -180,9 +178,13 @@ if "daily" in w_data and "hourly" in w_data:
     daily_w = w_data["daily"]
     daily_m = m_data.get("daily", {})
 
-    # past_days=3 を入れているため未来7日分にフィルタリング
     all_dates = daily_w["time"]
-    today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+
+    # 本日（実行日）の日付を取得して起点にする
+    today_dt = datetime.date.today()
+    today_str = today_dt.strftime("%Y-%m-%d")
+
+    # 本日以降の7日分に制限
     dates = [d for d in all_dates if d >= today_str][:7]
 
     # 実気温からの推定水温を算出
