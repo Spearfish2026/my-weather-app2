@@ -70,7 +70,7 @@ def weather_code_to_icon(code):
     if code in [0]:
         return "☀️ 晴れ"
     elif code in [1, 2]:
-        return "🌤️ 晴れ/時々曇り"
+        return "🌤️️ 晴れ/時々曇り"
     elif code in [3]:
         return "☁️ 曇り"
     elif code in [45, 48]:
@@ -83,29 +83,33 @@ def weather_code_to_icon(code):
         return "🌧 雨/その他"
 
 
-# --- APIから気象＆海洋データ取得（自動海洋データ補正付き） ---
+# --- 直近の気温連動型・水温推計ロジック ---
+def estimate_water_temp(daily_temp_max):
+    """過去〜予報の平均気温から島根沿岸の水温を推計"""
+    if not daily_temp_max:
+        return None
+    valid_temps = [t for t in daily_temp_max if t is not None]
+    if not valid_temps:
+        return None
+
+    avg_temp = sum(valid_temps) / len(valid_temps)
+    # 日本海沿岸（島根）の水温応答モデル（気温に対し緩やかに追従）
+    estimated_temp = 12.0 + (avg_temp - 5.0) * 0.65
+    return round(max(8.0, min(29.0, estimated_temp)), 1)
+
+
+# --- APIから気象＆海洋データ取得 ---
 def fetch_weather_and_marine_data(lat, lon):
-    # 気象API（陸地座標で直接取得）
-    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weather_code,wind_speed_10m_max,wind_direction_10m_dominant&hourly=wind_speed_10m,wind_direction_10m&timezone=Asia%2FTokyo"
+    # 気象API（過去の気温と1週間予報を取得）
+    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weather_code,temperature_2m_max,wind_speed_10m_max,wind_direction_10m_dominant&hourly=wind_speed_10m,wind_direction_10m&past_days=3&timezone=Asia%2FTokyo"
     weather_res = requests.get(weather_url).json()
 
-    # 海洋API：陸地判定を回避するため、海洋データが取れるまで沖合（北側）へシフトして検索
-    offsets = [0.0, 0.05, 0.10, 0.15]
-    marine_res = {}
-
-    for offset in offsets:
-        test_lat = lat + offset
-        marine_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={test_lat}&longitude={lon}&daily=sea_water_temperature_max,wave_height_max&hourly=wave_height,wave_direction&timezone=Asia%2FTokyo"
-        try:
-            res = requests.get(marine_url).json()
-            # 波高データの配列が存在し、少なくとも1つ非Nullの値があれば成功とみなす
-            if "hourly" in res and "wave_height" in res["hourly"]:
-                wave_data = res["hourly"]["wave_height"]
-                if any(v is not None for v in wave_data):
-                    marine_res = res
-                    break
-        except Exception:
-            continue
+    # 海洋API（一応取得を試みる）
+    marine_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&daily=sea_water_temperature_max,wave_height_max&hourly=wave_height,wave_direction&timezone=Asia%2FTokyo"
+    try:
+        marine_res = requests.get(marine_url).json()
+    except Exception:
+        marine_res = {}
 
     return weather_res, marine_res
 
@@ -175,9 +179,16 @@ w_data, m_data = fetch_weather_and_marine_data(lat, lon)
 if "daily" in w_data and "hourly" in w_data:
     daily_w = w_data["daily"]
     daily_m = m_data.get("daily", {})
-    dates = daily_w["time"]
 
-    # 上段：1週間の概況（カード型横並びレイアウト）
+    # past_days=3 を入れているため未来7日分にフィルタリング
+    all_dates = daily_w["time"]
+    today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    dates = [d for d in all_dates if d >= today_str][:7]
+
+    # 実気温からの推定水温を算出
+    est_water_temp = estimate_water_temp(daily_w.get("temperature_2m_max", []))
+
+    # 上段：1週間の概況
     st.subheader("🗓️ 向こう1週間の概況")
 
     st.markdown(
@@ -199,25 +210,26 @@ if "daily" in w_data and "hourly" in w_data:
     cols = st.columns(len(dates))
 
     for idx, date_str in enumerate(dates):
+        orig_idx = all_dates.index(date_str)
         dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
         display_date = dt.strftime("%m/%d (%a)")
 
-        w_code = daily_w["weather_code"][idx]
+        w_code = daily_w["weather_code"][orig_idx]
         w_icon = weather_code_to_icon(w_code)
-        w_speed = round(daily_w["wind_speed_10m_max"][idx] / 3.6, 1)
-        w_deg = daily_w["wind_direction_10m_dominant"][idx]
+        w_speed = round(daily_w["wind_speed_10m_max"][orig_idx] / 3.6, 1)
+        w_deg = daily_w["wind_direction_10m_dominant"][orig_idx]
         w_arrow = degree_to_arrow(w_deg)
 
-        # 水温取得
-        water_temp_str = "--"
+        # 水温取得（実測があれば優先、無ければ実気温推計値）
+        water_temp_str = f"約{est_water_temp}℃ (推定)"
         if (
             "sea_water_temperature_max" in daily_m
             and daily_m["sea_water_temperature_max"] is not None
-            and idx < len(daily_m["sea_water_temperature_max"])
-            and daily_m["sea_water_temperature_max"][idx] is not None
+            and orig_idx < len(daily_m["sea_water_temperature_max"])
+            and daily_m["sea_water_temperature_max"][orig_idx] is not None
         ):
             water_temp_str = (
-                f"{round(daily_m['sea_water_temperature_max'][idx], 1)}℃"
+                f"{round(daily_m['sea_water_temperature_max'][orig_idx], 1)}℃"
             )
 
         moon_8th, _ = get_moon_phase(dt)
@@ -245,7 +257,6 @@ if "daily" in w_data and "hourly" in w_data:
     # 下段：選択日の時間軸グラフ
     st.subheader("📊 時間軸での詳細（風・潮位・波）")
 
-    # 日付選択
     selected_date_str = st.selectbox(
         "確認したい日付を選択してください",
         dates,
@@ -254,12 +265,13 @@ if "daily" in w_data and "hourly" in w_data:
         ).strftime("%m/%d (%a)"),
     )
 
-    # 時間データのデータフレーム作成
     hourly_w = w_data["hourly"]
     hourly_m = m_data.get("hourly", {})
 
     wave_h_list = hourly_m.get("wave_height", [None] * len(hourly_w["time"]))
-    wave_d_list = hourly_m.get("wave_direction", [None] * len(hourly_w["time"]))
+    wave_d_list = hourly_m.get(
+        "wave_direction", [None] * len(hourly_w["time"])
+    )
 
     df_hourly = pd.DataFrame(
         {
@@ -273,20 +285,31 @@ if "daily" in w_data and "hourly" in w_data:
         }
     )
 
-    # 選択日付でフィルタリング
     df_selected = df_hourly[
         df_hourly["time"].str.startswith(selected_date_str)
     ].copy()
     df_selected["hour"] = df_selected["time"].apply(lambda x: x.split("T")[1])
     df_selected["wind_arrow"] = df_selected["wind_dir"].apply(degree_to_arrow)
-    df_selected["wave_arrow"] = df_selected["wave_dir"].apply(degree_to_arrow)
 
-    # 潮位データの計算
+    # 波高がNullの場合の安全フォールバック（風速からの風浪推計）
+    is_wave_estimated = False
+    if df_selected["wave_height"].isnull().all():
+        is_wave_estimated = True
+        df_selected["wave_height"] = df_selected["wind_speed"].apply(
+            lambda w: round(max(0.2, w * 0.12), 2)
+        )
+        df_selected["wave_arrow"] = df_selected["wind_arrow"]
+    else:
+        df_selected["wave_arrow"] = df_selected["wave_dir"].apply(
+            degree_to_arrow
+        )
+
+    # 潮位データ計算
     sel_dt = datetime.datetime.strptime(selected_date_str, "%Y-%m-%d")
     tide_data = get_tide_series(sel_dt, lon)
     df_selected["tide"] = tide_data
 
-    # --- 1. 風速＆潮位グラフ ---
+    # 風速＆潮位グラフ
     fig_wind = make_subplots(specs=[[{"secondary_y": True}]])
 
     fig_wind.add_trace(
@@ -311,7 +334,6 @@ if "daily" in w_data and "hourly" in w_data:
         secondary_y=True,
     )
 
-    # 風向矢印の追加（オレンジ色）
     max_wind = (
         max(df_selected["wind_speed"])
         if max(df_selected["wind_speed"]) > 0
@@ -332,7 +354,9 @@ if "daily" in w_data and "hourly" in w_data:
         title=f"💨 {sel_dt.strftime('%m/%d')} の風速・潮位推移（上部矢印：風向）",
         xaxis_title="時刻",
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+        ),
         margin=dict(l=20, r=20, t=60, b=20),
         height=380,
     )
@@ -345,43 +369,42 @@ if "daily" in w_data and "hourly" in w_data:
 
     st.plotly_chart(fig_wind, width="stretch")
 
-    # --- 2. 波高＆波向グラフ ---
+    # 波高＆波向グラフ
     fig_wave = go.Figure()
 
     fig_wave.add_trace(
         go.Bar(
             x=df_selected["hour"],
             y=df_selected["wave_height"],
-            name="波高 (m)",
+            name="波高 (m)" if not is_wave_estimated else "波高 (推定 m)",
             marker_color="#17becf",
             opacity=0.85,
         )
     )
 
-    # 波向矢印の追加
-    valid_waves = [
-        w
-        for w in df_selected["wave_height"]
-        if w is not None and not pd.isna(w)
-    ]
-    max_wave = max(valid_waves) if valid_waves else 1.0
+    max_wave = max(df_selected["wave_height"])
     if max_wave == 0:
         max_wave = 1.0
 
     for idx, row in df_selected.iterrows():
-        if row["wave_height"] is not None and not pd.isna(row["wave_height"]):
-            fig_wave.add_annotation(
-                x=row["hour"],
-                y=max_wave * 1.1 + 0.1,
-                text=row["wave_arrow"],
-                showarrow=False,
-                font=dict(size=16, color="#ff7f0e"),
-                xref="x",
-                yref="y",
-            )
+        fig_wave.add_annotation(
+            x=row["hour"],
+            y=max_wave * 1.1 + 0.1,
+            text=row["wave_arrow"],
+            showarrow=False,
+            font=dict(size=16, color="#ff7f0e"),
+            xref="x",
+            yref="y",
+        )
+
+    title_wave = (
+        f"🌊 {sel_dt.strftime('%m/%d')} の波高・波向推移（上部矢印：波向）"
+    )
+    if is_wave_estimated:
+        title_wave += " ※沿岸判定のため風速からの推定波浪を表示"
 
     fig_wave.update_layout(
-        title=f"🌊 {sel_dt.strftime('%m/%d')} の波高・波向推移（上部矢印：波向）",
+        title=title_wave,
         xaxis_title="時刻",
         yaxis_title="波高 (m)",
         hovermode="x unified",
