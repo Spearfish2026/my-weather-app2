@@ -8,7 +8,7 @@ import requests
 import streamlit as st
 
 
-# --- 月齢計算関数（標準計算方式） ---
+# --- 月齢計算関数 ---
 def get_moon_phase(date_obj):
     if isinstance(date_obj, datetime.date) and not isinstance(
         date_obj, datetime.datetime
@@ -23,7 +23,7 @@ def get_moon_phase(date_obj):
     return f"{phase_num}/8", float(age)
 
 
-# --- 簡易潮汐計算関数（24時間分の潮位グラフ用データの生成） ---
+# --- 簡易潮汐計算関数 ---
 def get_tide_series(date_obj, lon):
     d = ephem.Date(date_obj)
     prev_nm = ephem.previous_new_moon(d)
@@ -56,7 +56,7 @@ def get_tide_times(date_obj, lon):
     return high_str, low_str
 
 
-# --- 風向・波向角度（0〜360度）を矢印シンボルに変換 ---
+# --- 角度から矢印への変換 ---
 def degree_to_arrow(deg):
     if deg is None or math.isnan(deg):
         return "-"
@@ -65,7 +65,7 @@ def degree_to_arrow(deg):
     return arrows[idx]
 
 
-# --- 天気コード（WMO Code）を絵文字に変換 ---
+# --- 天気コードを絵文字に変換 ---
 def weather_code_to_icon(code):
     if code in [0]:
         return "☀️ 晴れ"
@@ -80,18 +80,30 @@ def weather_code_to_icon(code):
     elif code in [95, 96, 99]:
         return "⚡ 雷雨"
     else:
-        return "🌧️ 雨/その他"
+        return "🌧️️ 雨/その他"
 
 
-# --- Open-Meteo API から気象＆海洋データ取得 ---
+# --- APIから気象＆海洋データ取得（沖合座標補正付き） ---
 def fetch_weather_and_marine_data(lat, lon):
-    # 気象API
+    # 気象API（陸地座標でOK）
     weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weather_code,wind_speed_10m_max,wind_direction_10m_dominant&hourly=wind_speed_10m,wind_direction_10m&timezone=Asia%2FTokyo"
-    # 海洋API（波高・波向・水温）
-    marine_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&daily=sea_water_temperature_max,wave_height_max&hourly=wave_height,wave_direction&timezone=Asia%2FTokyo"
+
+    # 海洋API（陸地判定回避のため、少し北側/沖合の座標で取得）
+    marine_lat = lat + 0.03  # 約3km沖合
+    marine_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={marine_lat}&longitude={lon}&daily=sea_water_temperature_max,wave_height_max&hourly=wave_height,wave_direction&timezone=Asia%2FTokyo"
 
     weather_res = requests.get(weather_url).json()
-    marine_res = requests.get(marine_url).json()
+
+    try:
+        marine_res = requests.get(marine_url).json()
+        # 沖合補正でも取れない場合は元座標で再試行
+        if "hourly" not in marine_res or not marine_res["hourly"].get(
+            "wave_height"
+        ):
+            marine_url_orig = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&daily=sea_water_temperature_max,wave_height_max&hourly=wave_height,wave_direction&timezone=Asia%2FTokyo"
+            marine_res = requests.get(marine_url_orig).json()
+    except Exception:
+        marine_res = {}
 
     return weather_res, marine_res
 
@@ -163,13 +175,31 @@ if "daily" in w_data and "hourly" in w_data:
     daily_m = m_data.get("daily", {})
     dates = daily_w["time"]
 
-    # 上段：1週間の概況
+    # 上段：1週間の概況（カード型横並びレイアウト）
     st.subheader("🗓️ 向こう1週間の概況")
+
+    # カードスタイル用のCSS
+    st.markdown(
+        """
+        <style>
+        .metric-card {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 12px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 10px;
+        }
+        </style>
+    """,
+        unsafe_allow_html=True,
+    )
+
     cols = st.columns(len(dates))
 
     for idx, date_str in enumerate(dates):
         dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-        display_date = dt.strftime("%m/%d")
+        display_date = dt.strftime("%m/%d (%a)")
 
         w_code = daily_w["weather_code"][idx]
         w_icon = weather_code_to_icon(w_code)
@@ -177,7 +207,7 @@ if "daily" in w_data and "hourly" in w_data:
         w_deg = daily_w["wind_direction_10m_dominant"][idx]
         w_arrow = degree_to_arrow(w_deg)
 
-        # 海洋データの安全な取得
+        # 水温取得
         water_temp_str = "--"
         if (
             "sea_water_temperature_max" in daily_m
@@ -191,13 +221,21 @@ if "daily" in w_data and "hourly" in w_data:
         high_tide, low_tide = get_tide_times(dt, lon)
 
         with cols[idx]:
-            st.markdown(f"### {display_date}")
-            st.write(w_icon)
-            st.write(f"**風:** {w_arrow} {w_speed} m/s")
-            st.write(f"🌡️ **水温:** {water_temp_str}")
-            st.write(f"**月齢:** {moon_8th}")
-            st.write(f"🔺 **満潮:** {high_tide}")
-            st.write(f"🔻 **干潮:** {low_tide}")
+            st.markdown(
+                f"""
+            <div class="metric-card">
+                <h4 style="margin:0; text-align:center; color:#1e88e5;">{display_date}</h4>
+                <p style="text-align:center; font-size:1.1em; margin:8px 0;"><b>{w_icon}</b></p>
+                <hr style="margin:8px 0;">
+                <p style="margin:4px 0;"><b>風:</b> <span style="color:#e65100; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p>
+                <p style="margin:4px 0;">🌡️ <b>水温:</b> {water_temp_str}</p>
+                <p style="margin:4px 0;">🌕 <b>月齢:</b> {moon_8th}</p>
+                <p style="margin:4px 0; font-size:0.85em; color:#d32f2f;">🔺 <b>満潮:</b> {high_tide}</p>
+                <p style="margin:4px 0; font-size:0.85em; color:#1976d2;">🔻 <b>干潮:</b> {low_tide}</p>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
 
     st.divider()
 
@@ -267,7 +305,7 @@ if "daily" in w_data and "hourly" in w_data:
         secondary_y=True,
     )
 
-    # 風向矢印の追加
+    # 風向矢印の追加（黄色/オレンジで目立たせる）
     max_wind = (
         max(df_selected["wind_speed"])
         if max(df_selected["wind_speed"]) > 0
@@ -279,7 +317,7 @@ if "daily" in w_data and "hourly" in w_data:
             y=max_wind * 1.1 + 0.3,
             text=row["wind_arrow"],
             showarrow=False,
-            font=dict(size=14, color="#333333"),
+            font=dict(size=16, color="#ff7f0e"),  # オレンジ色
             xref="x",
             yref="y1",
         )
@@ -299,9 +337,9 @@ if "daily" in w_data and "hourly" in w_data:
         title_text="潮位 (相対cm)", secondary_y=True, showgrid=False
     )
 
-    st.plotly_chart(fig_wind, use_container_width=True)
+    st.plotly_chart(fig_wind, width="stretch")
 
-    # --- 2. 波高＆波向グラフ（新規追加） ---
+    # --- 2. 波高＆波向グラフ ---
     fig_wave = go.Figure()
 
     fig_wave.add_trace(
@@ -315,11 +353,8 @@ if "daily" in w_data and "hourly" in w_data:
     )
 
     # 波向矢印の追加
-    max_wave = (
-        df_selected["wave_height"].dropna().max()
-        if not df_selected["wave_height"].dropna().empty
-        else 1.0
-    )
+    valid_waves = [w for w in df_selected["wave_height"] if pd.notna(w)]
+    max_wave = max(valid_waves) if valid_waves else 1.0
     if max_wave == 0:
         max_wave = 1.0
 
@@ -330,7 +365,7 @@ if "daily" in w_data and "hourly" in w_data:
                 y=max_wave * 1.1 + 0.1,
                 text=row["wave_arrow"],
                 showarrow=False,
-                font=dict(size=14, color="#005580"),
+                font=dict(size=16, color="#ff7f0e"),  # オレンジ色
                 xref="x",
                 yref="y",
             )
@@ -345,7 +380,7 @@ if "daily" in w_data and "hourly" in w_data:
     )
     fig_wave.update_yaxes(gridcolor="#eee")
 
-    st.plotly_chart(fig_wave, use_container_width=True)
+    st.plotly_chart(fig_wave, width="stretch")
 
 else:
     st.error("データの取得に失敗しました。")
