@@ -58,7 +58,7 @@ def get_tide_times(date_obj, lon):
 
 # --- 角度から矢印への変換 ---
 def degree_to_arrow(deg):
-    if deg is None or math.isnan(deg):
+    if deg is None or pd.isna(deg):
         return "-"
     arrows = ["↓", "↙", "←", "↖", "↑", "↗", "→", "↘"]
     idx = int((deg + 22.5) / 45) % 8
@@ -80,30 +80,32 @@ def weather_code_to_icon(code):
     elif code in [95, 96, 99]:
         return "⚡ 雷雨"
     else:
-        return "🌧️️ 雨/その他"
+        return "🌧 雨/その他"
 
 
-# --- APIから気象＆海洋データ取得（沖合座標補正付き） ---
+# --- APIから気象＆海洋データ取得（自動海洋データ補正付き） ---
 def fetch_weather_and_marine_data(lat, lon):
-    # 気象API（陸地座標でOK）
+    # 気象API（陸地座標で直接取得）
     weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weather_code,wind_speed_10m_max,wind_direction_10m_dominant&hourly=wind_speed_10m,wind_direction_10m&timezone=Asia%2FTokyo"
-
-    # 海洋API（陸地判定回避のため、少し北側/沖合の座標で取得）
-    marine_lat = lat + 0.03  # 約3km沖合
-    marine_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={marine_lat}&longitude={lon}&daily=sea_water_temperature_max,wave_height_max&hourly=wave_height,wave_direction&timezone=Asia%2FTokyo"
-
     weather_res = requests.get(weather_url).json()
 
-    try:
-        marine_res = requests.get(marine_url).json()
-        # 沖合補正でも取れない場合は元座標で再試行
-        if "hourly" not in marine_res or not marine_res["hourly"].get(
-            "wave_height"
-        ):
-            marine_url_orig = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&daily=sea_water_temperature_max,wave_height_max&hourly=wave_height,wave_direction&timezone=Asia%2FTokyo"
-            marine_res = requests.get(marine_url_orig).json()
-    except Exception:
-        marine_res = {}
+    # 海洋API：陸地判定を回避するため、海洋データが取れるまで沖合（北側）へシフトして検索
+    offsets = [0.0, 0.05, 0.10, 0.15]
+    marine_res = {}
+
+    for offset in offsets:
+        test_lat = lat + offset
+        marine_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={test_lat}&longitude={lon}&daily=sea_water_temperature_max,wave_height_max&hourly=wave_height,wave_direction&timezone=Asia%2FTokyo"
+        try:
+            res = requests.get(marine_url).json()
+            # 波高データの配列が存在し、少なくとも1つ非Nullの値があれば成功とみなす
+            if "hourly" in res and "wave_height" in res["hourly"]:
+                wave_data = res["hourly"]["wave_height"]
+                if any(v is not None for v in wave_data):
+                    marine_res = res
+                    break
+        except Exception:
+            continue
 
     return weather_res, marine_res
 
@@ -178,7 +180,6 @@ if "daily" in w_data and "hourly" in w_data:
     # 上段：1週間の概況（カード型横並びレイアウト）
     st.subheader("🗓️ 向こう1週間の概況")
 
-    # カードスタイル用のCSS
     st.markdown(
         """
         <style>
@@ -211,6 +212,8 @@ if "daily" in w_data and "hourly" in w_data:
         water_temp_str = "--"
         if (
             "sea_water_temperature_max" in daily_m
+            and daily_m["sea_water_temperature_max"] is not None
+            and idx < len(daily_m["sea_water_temperature_max"])
             and daily_m["sea_water_temperature_max"][idx] is not None
         ):
             water_temp_str = (
@@ -255,6 +258,9 @@ if "daily" in w_data and "hourly" in w_data:
     hourly_w = w_data["hourly"]
     hourly_m = m_data.get("hourly", {})
 
+    wave_h_list = hourly_m.get("wave_height", [None] * len(hourly_w["time"]))
+    wave_d_list = hourly_m.get("wave_direction", [None] * len(hourly_w["time"]))
+
     df_hourly = pd.DataFrame(
         {
             "time": hourly_w["time"],
@@ -262,8 +268,8 @@ if "daily" in w_data and "hourly" in w_data:
                 round(s / 3.6, 1) for s in hourly_w["wind_speed_10m"]
             ],
             "wind_dir": hourly_w["wind_direction_10m"],
-            "wave_height": hourly_m.get("wave_height", [None] * len(hourly_w["time"])),
-            "wave_dir": hourly_m.get("wave_direction", [None] * len(hourly_w["time"])),
+            "wave_height": wave_h_list,
+            "wave_dir": wave_d_list,
         }
     )
 
@@ -305,7 +311,7 @@ if "daily" in w_data and "hourly" in w_data:
         secondary_y=True,
     )
 
-    # 風向矢印の追加（黄色/オレンジで目立たせる）
+    # 風向矢印の追加（オレンジ色）
     max_wind = (
         max(df_selected["wind_speed"])
         if max(df_selected["wind_speed"]) > 0
@@ -317,7 +323,7 @@ if "daily" in w_data and "hourly" in w_data:
             y=max_wind * 1.1 + 0.3,
             text=row["wind_arrow"],
             showarrow=False,
-            font=dict(size=16, color="#ff7f0e"),  # オレンジ色
+            font=dict(size=16, color="#ff7f0e"),
             xref="x",
             yref="y1",
         )
@@ -353,19 +359,23 @@ if "daily" in w_data and "hourly" in w_data:
     )
 
     # 波向矢印の追加
-    valid_waves = [w for w in df_selected["wave_height"] if pd.notna(w)]
+    valid_waves = [
+        w
+        for w in df_selected["wave_height"]
+        if w is not None and not pd.isna(w)
+    ]
     max_wave = max(valid_waves) if valid_waves else 1.0
     if max_wave == 0:
         max_wave = 1.0
 
     for idx, row in df_selected.iterrows():
-        if pd.notna(row["wave_height"]):
+        if row["wave_height"] is not None and not pd.isna(row["wave_height"]):
             fig_wave.add_annotation(
                 x=row["hour"],
                 y=max_wave * 1.1 + 0.1,
                 text=row["wave_arrow"],
                 showarrow=False,
-                font=dict(size=16, color="#ff7f0e"),  # オレンジ色
+                font=dict(size=16, color="#ff7f0e"),
                 xref="x",
                 yref="y",
             )
