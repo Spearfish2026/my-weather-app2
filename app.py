@@ -83,7 +83,7 @@ def degree_to_arrow(deg):
 # --- 天気コードを絵文字に変換 ---
 def weather_code_to_icon(code):
     if code in [0]:
-        return "☀️️ 晴れ"
+        return "☀️ 晴れ"
     elif code in [1, 2]:
         return "🌤 晴れ/時々曇り"
     elif code in [3]:
@@ -173,7 +173,7 @@ else:
     lat, lon = default_lat, default_lon
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("⚙️ 座標直接調整")
+st.sidebar.subheader("⚙️️ 座標直接調整")
 lat = st.sidebar.number_input(
     "緯度 (Latitude)", value=float(lat), format="%.4f"
 )
@@ -212,35 +212,33 @@ if "daily" in w_data and "hourly" in w_data:
 
     # 横スクロール対応スタイル
     st.markdown(
-        """
-        <style>
-        .horizontal-scroll-container {
-            display: flex;
-            flex-direction: row;
-            overflow-x: auto;
-            gap: 12px;
-            padding-bottom: 12px;
-            -webkit-overflow-scrolling: touch;
-        }
-        .horizontal-scroll-container::-webkit-scrollbar {
-            height: 6px;
-        }
-        .horizontal-scroll-container::-webkit-scrollbar-thumb {
-            background-color: #ccc;
-            border-radius: 3px;
-        }
-        .metric-card-scroll {
-            min-width: 170px;
-            max-width: 180px;
-            flex: 0 0 auto;
-            background-color: #f8f9fa;
-            border-radius: 10px;
-            padding: 12px;
-            border: 1px solid #e9ecef;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        </style>
-    """,
+        """<style>
+.horizontal-scroll-container {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 12px;
+    padding-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+}
+.horizontal-scroll-container::-webkit-scrollbar {
+    height: 6px;
+}
+.horizontal-scroll-container::-webkit-scrollbar-thumb {
+    background-color: #ccc;
+    border-radius: 3px;
+}
+.metric-card-scroll {
+    min-width: 170px;
+    max-width: 180px;
+    flex: 0 0 auto;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 12px;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+</style>""",
         unsafe_allow_html=True,
     )
 
@@ -271,25 +269,10 @@ if "daily" in w_data and "hourly" in w_data:
         tide_name = get_tide_name(m_age)
         high_tide, low_tide = get_tide_times(dt, lon)
 
-        card = f"""
-        <div class="metric-card-scroll">
-            <h4 style="margin:0; text-align:center; color:#1e88e5; font-size:1em;">{display_date}</h4>
-            <p style="text-align:center; font-size:1em; margin:6px 0;"><b>{w_icon}</b></p>
-            <hr style="margin:6px 0;">
-            <p style="margin:4px 0; font-size:0.85em;"><b>風:</b> <span style="color:#e65100; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p>
-            <p style="margin:4px 0; font-size:0.85em;">🌡 <b>水温:</b> {water_temp_str}</p>
-            <p style="margin:4px 0; font-size:0.85em;">🌕 <b>月齢:</b> {moon_8th} <span style="background-color:#e1f5fe; color:#0288d1; padding:1px 4px; border-radius:3px; font-weight:bold; font-size:0.8em;">{tide_name}</span></p>
-            <p style="margin:4px 0; font-size:0.8em; color:#d32f2f;">🔺 <b>満潮:</b> {high_tide}</p>
-            <p style="margin:4px 0; font-size:0.8em; color:#1976d2;">🔻 <b>干潮:</b> {low_tide}</p>
-        </div>
-        """
+        card = f'<div class="metric-card-scroll"><h4 style="margin:0; text-align:center; color:#1e88e5; font-size:1em;">{display_date}</h4><p style="text-align:center; font-size:1em; margin:6px 0;"><b>{w_icon}</b></p><hr style="margin:6px 0;"><p style="margin:4px 0; font-size:0.85em;"><b>風:</b> <span style="color:#e65100; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p><p style="margin:4px 0; font-size:0.85em;">🌡 <b>水温:</b> {water_temp_str}</p><p style="margin:4px 0; font-size:0.85em;">🌕 <b>月齢:</b> {moon_8th} <span style="background-color:#e1f5fe; color:#0288d1; padding:1px 4px; border-radius:3px; font-weight:bold; font-size:0.8em;">{tide_name}</span></p><p style="margin:4px 0; font-size:0.8em; color:#d32f2f;">🔺 <b>満潮:</b> {high_tide}</p><p style="margin:4px 0; font-size:0.8em; color:#1976d2;">🔻 <b>干潮:</b> {low_tide}</p></div>'
         cards_html.append(card)
 
-    scroll_html = f"""
-    <div class="horizontal-scroll-container">
-        {"".join(cards_html)}
-    </div>
-    """
+    scroll_html = f'<div class="horizontal-scroll-container">{"".join(cards_html)}</div>'
     st.markdown(scroll_html, unsafe_allow_html=True)
 
     st.divider()
