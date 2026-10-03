@@ -173,7 +173,7 @@ else:
     lat, lon = default_lat, default_lon
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("⚙️️ 座標直接調整")
+st.sidebar.subheader("⚙️ 座標直接調整")
 lat = st.sidebar.number_input(
     "緯度 (Latitude)", value=float(lat), format="%.4f"
 )
@@ -210,7 +210,7 @@ if "daily" in w_data and "hourly" in w_data:
     # 上段：1週間の概況
     st.subheader("🗓️ 向こう1週間の概況")
 
-    # 横スクロール対応スタイル
+    # スタイル指定：白背景＆視認性の高い文字色に明確に固定
     st.markdown(
         """<style>
 .horizontal-scroll-container {
@@ -225,18 +225,22 @@ if "daily" in w_data and "hourly" in w_data:
     height: 6px;
 }
 .horizontal-scroll-container::-webkit-scrollbar-thumb {
-    background-color: #ccc;
+    background-color: #888;
     border-radius: 3px;
 }
 .metric-card-scroll {
-    min-width: 170px;
-    max-width: 180px;
+    min-width: 175px;
+    max-width: 185px;
     flex: 0 0 auto;
-    background-color: #f8f9fa;
-    border-radius: 10px;
+    background-color: #ffffff !important;
+    color: #222222 !important;
+    border-radius: 12px;
     padding: 12px;
-    border: 1px solid #e9ecef;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    border: 1px solid #dcdcdc;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.metric-card-scroll * {
+    color: #222222;
 }
 </style>""",
         unsafe_allow_html=True,
@@ -269,7 +273,7 @@ if "daily" in w_data and "hourly" in w_data:
         tide_name = get_tide_name(m_age)
         high_tide, low_tide = get_tide_times(dt, lon)
 
-        card = f'<div class="metric-card-scroll"><h4 style="margin:0; text-align:center; color:#1e88e5; font-size:1em;">{display_date}</h4><p style="text-align:center; font-size:1em; margin:6px 0;"><b>{w_icon}</b></p><hr style="margin:6px 0;"><p style="margin:4px 0; font-size:0.85em;"><b>風:</b> <span style="color:#e65100; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p><p style="margin:4px 0; font-size:0.85em;">🌡 <b>水温:</b> {water_temp_str}</p><p style="margin:4px 0; font-size:0.85em;">🌕 <b>月齢:</b> {moon_8th} <span style="background-color:#e1f5fe; color:#0288d1; padding:1px 4px; border-radius:3px; font-weight:bold; font-size:0.8em;">{tide_name}</span></p><p style="margin:4px 0; font-size:0.8em; color:#d32f2f;">🔺 <b>満潮:</b> {high_tide}</p><p style="margin:4px 0; font-size:0.8em; color:#1976d2;">🔻 <b>干潮:</b> {low_tide}</p></div>'
+        card = f'<div class="metric-card-scroll"><h4 style="margin:0; text-align:center; color:#0277bd !important; font-size:1.05em; font-weight:bold;">{display_date}</h4><p style="text-align:center; font-size:1em; margin:6px 0; color:#222222 !important;"><b>{w_icon}</b></p><hr style="margin:6px 0; border-color:#eee;"><p style="margin:4px 0; font-size:0.85em; color:#222222 !important;"><b>風:</b> <span style="color:#e65100 !important; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p><p style="margin:4px 0; font-size:0.85em; color:#222222 !important;">🌡 <b>水温:</b> {water_temp_str}</p><p style="margin:4px 0; font-size:0.85em; color:#222222 !important;">🌕 <b>月齢:</b> {moon_8th} <span style="background-color:#0288d1; color:#ffffff !important; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:0.8em;">{tide_name}</span></p><p style="margin:4px 0; font-size:0.82em; color:#c62828 !important;">🔺 <b>満潮:</b> {high_tide}</p><p style="margin:4px 0; font-size:0.82em; color:#1565c0 !important;">🔻 <b>干潮:</b> {low_tide}</p></div>'
         cards_html.append(card)
 
     scroll_html = f'<div class="horizontal-scroll-container">{"".join(cards_html)}</div>'
@@ -374,14 +378,18 @@ if "daily" in w_data and "hourly" in w_data:
         )
 
     fig_wind.update_layout(
-        title=f"💨 {sel_dt.strftime('%m/%d')} の風速・潮位推移（上部矢印：風向）",
+        title=dict(
+            text=f"💨 {sel_dt.strftime('%m/%d')} の風速・潮位推移（上部矢印：風向）",
+            x=0,
+            xanchor="left",
+        ),
         xaxis_title="時刻",
         hovermode="x unified",
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+            orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5
         ),
-        margin=dict(l=20, r=20, t=60, b=20),
-        height=380,
+        margin=dict(l=20, r=20, t=80, b=20),
+        height=400,
     )
     fig_wind.update_yaxes(
         title_text="風速 (m/s)", secondary_y=False, gridcolor="#eee"
@@ -424,15 +432,18 @@ if "daily" in w_data and "hourly" in w_data:
         f"🌊 {sel_dt.strftime('%m/%d')} の波高・波向推移（上部矢印：波向）"
     )
     if is_wave_estimated:
-        title_wave += " ※沿岸判定のため風速からの推定波浪を表示"
+        title_wave += " ※風速からの推定表示"
 
     fig_wave.update_layout(
-        title=title_wave,
+        title=dict(text=title_wave, x=0, xanchor="left"),
         xaxis_title="時刻",
         yaxis_title="波高 (m)",
         hovermode="x unified",
-        margin=dict(l=20, r=20, t=60, b=20),
-        height=350,
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5
+        ),
+        margin=dict(l=20, r=20, t=80, b=20),
+        height=370,
     )
     fig_wave.update_yaxes(gridcolor="#eee")
 
