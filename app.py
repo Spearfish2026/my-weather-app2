@@ -383,17 +383,19 @@ if "daily" in w_data and "hourly" in w_data:
             text=f"💨 {sel_dt.strftime('%m/%d')} の風速・潮位推移（上部矢印：風向）",
             x=0,
             xanchor="left",
+            font=dict(size=14),
         ),
         xaxis_title="時刻",
         hovermode="x unified",
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5
+            orientation="h",
+            yanchor="top",
+            y=-0.25,  # 凡例をグラフの下側に配置
+            xanchor="center",
+            x=0.5,
         ),
-        margin=dict(l=20, r=20, t=80, b=20),
-        height=400,
-        xaxis=dict(fixedrange=True),
-        yaxis=dict(fixedrange=True),
-        yaxis2=dict(fixedrange=True),
+        margin=dict(l=20, r=20, t=50, b=70),  # 上下マージン調整
+        height=420,
     )
     fig_wind.update_yaxes(
         title_text="風速 (m/s)", secondary_y=False, gridcolor="#eee"
@@ -402,12 +404,7 @@ if "daily" in w_data and "hourly" in w_data:
         title_text="潮位 (相対cm)", secondary_y=True, showgrid=False
     )
 
-    # configでズーム・操作ツール類を無効化
-    st.plotly_chart(
-        fig_wind,
-        width="stretch",
-        config={"scrollZoom": False, "displayModeBar": False},
-    )
+    st.plotly_chart(fig_wind, width="stretch")
 
     # 波高＆波向グラフ
     fig_wave = go.Figure()
@@ -444,25 +441,19 @@ if "daily" in w_data and "hourly" in w_data:
         title_wave += " ※風速からの推定表示"
 
     fig_wave.update_layout(
-        title=dict(text=title_wave, x=0, xanchor="left"),
+        title=dict(text=title_wave, x=0, xanchor="left", font=dict(size=14)),
         xaxis_title="時刻",
         yaxis_title="波高 (m)",
         hovermode="x unified",
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5
+            orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5
         ),
-        margin=dict(l=20, r=20, t=80, b=20),
-        height=370,
-        xaxis=dict(fixedrange=True),
-        yaxis=dict(fixedrange=True),
+        margin=dict(l=20, r=20, t=50, b=70),
+        height=390,
     )
     fig_wave.update_yaxes(gridcolor="#eee")
 
-    st.plotly_chart(
-        fig_wave,
-        width="stretch",
-        config={"scrollZoom": False, "displayModeBar": False},
-    )
+    st.plotly_chart(fig_wave, width="stretch")
 
 else:
     st.error("データの取得に失敗しました。")
