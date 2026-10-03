@@ -337,7 +337,7 @@ if "daily" in w_data and "hourly" in w_data:
     tide_data = get_tide_series(sel_dt, lon)
     df_selected["tide"] = tide_data
 
-    # 風速＆潮位グラフ
+   # 風速＆潮位グラフ
     fig_wind = make_subplots(specs=[[{"secondary_y": True}]])
 
     fig_wind.add_trace(
@@ -383,28 +383,36 @@ if "daily" in w_data and "hourly" in w_data:
             text=f"💨 {sel_dt.strftime('%m/%d')} の風速・潮位推移（上部矢印：風向）",
             x=0,
             xanchor="left",
-            font=dict(size=14),
+            font=dict(size=14, color="#ffffff"),
         ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#cccccc"),
         xaxis_title="時刻",
         hovermode="x unified",
         legend=dict(
             orientation="h",
             yanchor="top",
-            y=-0.25,  # 凡例をグラフの下側に配置
+            y=-0.28,
             xanchor="center",
             x=0.5,
+            font=dict(color="#ffffff"),
         ),
-        margin=dict(l=20, r=20, t=50, b=70),  # 上下マージン調整
+        margin=dict(l=10, r=10, t=50, b=80),
         height=420,
     )
+    fig_wind.update_xaxes(gridcolor="#333333", zerolinecolor="#333333")
     fig_wind.update_yaxes(
-        title_text="風速 (m/s)", secondary_y=False, gridcolor="#eee"
+        title_text="風速 (m/s)",
+        secondary_y=False,
+        gridcolor="#333333",
+        zerolinecolor="#333333",
     )
     fig_wind.update_yaxes(
         title_text="潮位 (相対cm)", secondary_y=True, showgrid=False
     )
 
-    st.plotly_chart(fig_wind, width="stretch")
+    st.plotly_chart(fig_wind, use_container_width=True)
 
     # 波高＆波向グラフ
     fig_wave = go.Figure()
@@ -441,19 +449,30 @@ if "daily" in w_data and "hourly" in w_data:
         title_wave += " ※風速からの推定表示"
 
     fig_wave.update_layout(
-        title=dict(text=title_wave, x=0, xanchor="left", font=dict(size=14)),
+        title=dict(
+            text=title_wave, x=0, xanchor="left", font=dict(size=14, color="#ffffff")
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#cccccc"),
         xaxis_title="時刻",
         yaxis_title="波高 (m)",
         hovermode="x unified",
         legend=dict(
-            orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5
+            orientation="h",
+            yanchor="top",
+            y=-0.28,
+            xanchor="center",
+            x=0.5,
+            font=dict(color="#ffffff"),
         ),
-        margin=dict(l=20, r=20, t=50, b=70),
+        margin=dict(l=10, r=10, t=50, b=80),
         height=390,
     )
-    fig_wave.update_yaxes(gridcolor="#eee")
+    fig_wave.update_xaxes(gridcolor="#333333", zerolinecolor="#333333")
+    fig_wave.update_yaxes(gridcolor="#333333", zerolinecolor="#333333")
 
-    st.plotly_chart(fig_wave, width="stretch")
+    st.plotly_chart(fig_wave, use_container_width=True)
 
 else:
     st.error("データの取得に失敗しました。")
