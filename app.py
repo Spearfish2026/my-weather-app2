@@ -1,4 +1,3 @@
-
 import datetime
 import math
 import ephem
@@ -211,7 +210,7 @@ if "daily" in w_data and "hourly" in w_data:
     # 上段：1週間の概況
     st.subheader("🗓️ 向こう1週間の概況")
 
-    # スタイル指定：白背景＆視認性の高い文字色に明確に固定
+    # カード用CSS（白背景・文字固定）
     st.markdown(
         """<style>
 .horizontal-scroll-container {
@@ -319,7 +318,7 @@ if "daily" in w_data and "hourly" in w_data:
     df_selected["hour"] = df_selected["time"].apply(lambda x: x.split("T")[1])
     df_selected["wind_arrow"] = df_selected["wind_dir"].apply(degree_to_arrow)
 
-    # 波高がNullの場合の安全フォールバック（風速からの風浪推計）
+    # 波高の安全フォールバック（風浪推計）
     is_wave_estimated = False
     if df_selected["wave_height"].isnull().all():
         is_wave_estimated = True
@@ -337,7 +336,11 @@ if "daily" in w_data and "hourly" in w_data:
     tide_data = get_tide_series(sel_dt, lon)
     df_selected["tide"] = tide_data
 
-  # 風速＆潮位グラフ
+    # --- グラフ1: 風速＆潮位 ---
+    st.markdown(
+        f"##### 💨 {sel_dt.strftime('%m/%d')} の風速・潮位推移（上部矢印：風向）"
+    )
+
     fig_wind = make_subplots(specs=[[{"secondary_y": True}]])
 
     fig_wind.add_trace(
@@ -379,55 +382,50 @@ if "daily" in w_data and "hourly" in w_data:
         )
 
     fig_wind.update_layout(
-        title=dict(
-            text=f"💨 {sel_dt.strftime('%m/%d')} の風速・潮位推移（上部矢印：風向）",
-            x=0,
-            xanchor="left",
-            font=dict(size=14, color="#ffffff"),
-        ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#cccccc"),
-        xaxis_title="時刻",
+        xaxis=dict(
+            title="時刻",
+            gridcolor="#333333",
+            zerolinecolor="#333333",
+            fixedrange=True,
+        ),
         hovermode="x unified",
         legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=-0.28,
-            xanchor="center",
-            x=0.5,
-            font=dict(color="#ffffff"),
+            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
         ),
-        margin=dict(l=10, r=10, t=50, b=80),
-        height=420,
-        # ダブルクリック時のリセット挙動を確実に設定
-        uirevision=selected_date_str,
-    )
-
-    # 軸のレンジを毎回自動スケール（固定化を解除）
-    fig_wind.update_xaxes(
-        gridcolor="#333333", zerolinecolor="#333333", autorange=True
+        margin=dict(l=10, r=10, t=30, b=20),
+        height=350,
     )
     fig_wind.update_yaxes(
         title_text="風速 (m/s)",
         secondary_y=False,
         gridcolor="#333333",
         zerolinecolor="#333333",
-        autorange=True,
+        fixedrange=True,
     )
     fig_wind.update_yaxes(
         title_text="潮位 (相対cm)",
         secondary_y=True,
         showgrid=False,
-        autorange=True,
+        fixedrange=True,
     )
 
-    # 日付ごとの一意なkeyを渡すことで、日付切替時にコンポーネントを完全再描画させる
     st.plotly_chart(
-        fig_wind, use_container_width=True, key=f"wind_chart_{selected_date_str}"
+        fig_wind,
+        use_container_width=True,
+        config={"displayModeBar": False, "scrollZoom": False},
     )
 
-    # 波高＆波向グラフ
+    # --- グラフ2: 波高＆波向 ---
+    title_wave = (
+        f"🌊 {sel_dt.strftime('%m/%d')} の波高・波向推移（上部矢印：波向）"
+    )
+    if is_wave_estimated:
+        title_wave += " ※風速からの推定表示"
+    st.markdown(f"##### {title_wave}")
+
     fig_wave = go.Figure()
 
     fig_wave.add_trace(
@@ -455,47 +453,34 @@ if "daily" in w_data and "hourly" in w_data:
             yref="y",
         )
 
-    title_wave = (
-        f"🌊 {sel_dt.strftime('%m/%d')} の波高・波向推移（上部矢印：波向）"
-    )
-    if is_wave_estimated:
-        title_wave += " ※風速からの推定表示"
-
     fig_wave.update_layout(
-        title=dict(
-            text=title_wave,
-            x=0,
-            xanchor="left",
-            font=dict(size=14, color="#ffffff"),
-        ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#cccccc"),
-        xaxis_title="時刻",
-        yaxis_title="波高 (m)",
+        xaxis=dict(
+            title="時刻",
+            gridcolor="#333333",
+            zerolinecolor="#333333",
+            fixedrange=True,
+        ),
+        yaxis=dict(
+            title="波高 (m)",
+            gridcolor="#333333",
+            zerolinecolor="#333333",
+            fixedrange=True,
+        ),
         hovermode="x unified",
         legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=-0.28,
-            xanchor="center",
-            x=0.5,
-            font=dict(color="#ffffff"),
+            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
         ),
-        margin=dict(l=10, r=10, t=50, b=80),
-        height=390,
-        uirevision=selected_date_str,
-    )
-
-    fig_wave.update_xaxes(
-        gridcolor="#333333", zerolinecolor="#333333", autorange=True
-    )
-    fig_wave.update_yaxes(
-        gridcolor="#333333", zerolinecolor="#333333", autorange=True
+        margin=dict(l=10, r=10, t=30, b=20),
+        height=320,
     )
 
     st.plotly_chart(
-        fig_wave, use_container_width=True, key=f"wave_chart_{selected_date_str}"
+        fig_wave,
+        use_container_width=True,
+        config={"displayModeBar": False, "scrollZoom": False},
     )
 
 else:
