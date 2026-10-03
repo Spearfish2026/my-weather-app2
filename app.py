@@ -83,11 +83,11 @@ def degree_to_arrow(deg):
 # --- 天気コードを絵文字に変換 ---
 def weather_code_to_icon(code):
     if code in [0]:
-        return "☀️ 晴れ"
+        return "☀️️ 晴れ"
     elif code in [1, 2]:
         return "🌤 晴れ/時々曇り"
     elif code in [3]:
-        return "☁️️ 曇り"
+        return "☁ 曇り"
     elif code in [45, 48]:
         return "🌫️ 霧"
     elif code in [51, 53, 55, 61, 63, 65, 80, 81, 82]:
@@ -210,24 +210,41 @@ if "daily" in w_data and "hourly" in w_data:
     # 上段：1週間の概況
     st.subheader("🗓️ 向こう1週間の概況")
 
+    # 横スクロール対応スタイル
     st.markdown(
         """
         <style>
-        .metric-card {
+        .horizontal-scroll-container {
+            display: flex;
+            flex-direction: row;
+            overflow-x: auto;
+            gap: 12px;
+            padding-bottom: 12px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .horizontal-scroll-container::-webkit-scrollbar {
+            height: 6px;
+        }
+        .horizontal-scroll-container::-webkit-scrollbar-thumb {
+            background-color: #ccc;
+            border-radius: 3px;
+        }
+        .metric-card-scroll {
+            min-width: 170px;
+            max-width: 180px;
+            flex: 0 0 auto;
             background-color: #f8f9fa;
             border-radius: 10px;
             padding: 12px;
             border: 1px solid #e9ecef;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            margin-bottom: 10px;
         }
         </style>
     """,
         unsafe_allow_html=True,
     )
 
-    cols = st.columns(len(dates))
-
+    cards_html = []
     for idx, date_str in enumerate(dates):
         orig_idx = all_dates.index(date_str)
         dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
@@ -239,7 +256,6 @@ if "daily" in w_data and "hourly" in w_data:
         w_deg = daily_w["wind_direction_10m_dominant"][orig_idx]
         w_arrow = degree_to_arrow(w_deg)
 
-        # 水温取得（実測があれば優先、無ければ実気温推計値）
         water_temp_str = f"約{est_water_temp}℃ (推定)"
         if (
             "sea_water_temperature_max" in daily_m
@@ -255,22 +271,26 @@ if "daily" in w_data and "hourly" in w_data:
         tide_name = get_tide_name(m_age)
         high_tide, low_tide = get_tide_times(dt, lon)
 
-        with cols[idx]:
-            st.markdown(
-                f"""
-            <div class="metric-card">
-                <h4 style="margin:0; text-align:center; color:#1e88e5;">{display_date}</h4>
-                <p style="text-align:center; font-size:1.1em; margin:8px 0;"><b>{w_icon}</b></p>
-                <hr style="margin:8px 0;">
-                <p style="margin:4px 0;"><b>風:</b> <span style="color:#e65100; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p>
-                <p style="margin:4px 0;">🌡 <b>水温:</b> {water_temp_str}</p>
-                <p style="margin:4px 0;">🌕 <b>月齢:</b> {moon_8th} <span style="background-color:#e1f5fe; color:#0288d1; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:0.85em;">{tide_name}</span></p>
-                <p style="margin:4px 0; font-size:0.85em; color:#d32f2f;">🔺 <b>満潮:</b> {high_tide}</p>
-                <p style="margin:4px 0; font-size:0.85em; color:#1976d2;">🔻 <b>干潮:</b> {low_tide}</p>
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
+        card = f"""
+        <div class="metric-card-scroll">
+            <h4 style="margin:0; text-align:center; color:#1e88e5; font-size:1em;">{display_date}</h4>
+            <p style="text-align:center; font-size:1em; margin:6px 0;"><b>{w_icon}</b></p>
+            <hr style="margin:6px 0;">
+            <p style="margin:4px 0; font-size:0.85em;"><b>風:</b> <span style="color:#e65100; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p>
+            <p style="margin:4px 0; font-size:0.85em;">🌡 <b>水温:</b> {water_temp_str}</p>
+            <p style="margin:4px 0; font-size:0.85em;">🌕 <b>月齢:</b> {moon_8th} <span style="background-color:#e1f5fe; color:#0288d1; padding:1px 4px; border-radius:3px; font-weight:bold; font-size:0.8em;">{tide_name}</span></p>
+            <p style="margin:4px 0; font-size:0.8em; color:#d32f2f;">🔺 <b>満潮:</b> {high_tide}</p>
+            <p style="margin:4px 0; font-size:0.8em; color:#1976d2;">🔻 <b>干潮:</b> {low_tide}</p>
+        </div>
+        """
+        cards_html.append(card)
+
+    scroll_html = f"""
+    <div class="horizontal-scroll-container">
+        {"".join(cards_html)}
+    </div>
+    """
+    st.markdown(scroll_html, unsafe_allow_html=True)
 
     st.divider()
 
