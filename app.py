@@ -1,3 +1,4 @@
+
 import datetime
 import math
 import ephem
@@ -390,6 +391,9 @@ if "daily" in w_data and "hourly" in w_data:
         ),
         margin=dict(l=20, r=20, t=80, b=20),
         height=400,
+        xaxis=dict(fixedrange=True),
+        yaxis=dict(fixedrange=True),
+        yaxis2=dict(fixedrange=True),
     )
     fig_wind.update_yaxes(
         title_text="風速 (m/s)", secondary_y=False, gridcolor="#eee"
@@ -398,7 +402,12 @@ if "daily" in w_data and "hourly" in w_data:
         title_text="潮位 (相対cm)", secondary_y=True, showgrid=False
     )
 
-    st.plotly_chart(fig_wind, width="stretch")
+    # configでズーム・操作ツール類を無効化
+    st.plotly_chart(
+        fig_wind,
+        width="stretch",
+        config={"scrollZoom": False, "displayModeBar": False},
+    )
 
     # 波高＆波向グラフ
     fig_wave = go.Figure()
@@ -444,10 +453,16 @@ if "daily" in w_data and "hourly" in w_data:
         ),
         margin=dict(l=20, r=20, t=80, b=20),
         height=370,
+        xaxis=dict(fixedrange=True),
+        yaxis=dict(fixedrange=True),
     )
     fig_wave.update_yaxes(gridcolor="#eee")
 
-    st.plotly_chart(fig_wave, width="stretch")
+    st.plotly_chart(
+        fig_wave,
+        width="stretch",
+        config={"scrollZoom": False, "displayModeBar": False},
+    )
 
 else:
     st.error("データの取得に失敗しました。")
