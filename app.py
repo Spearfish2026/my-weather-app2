@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
-import streamlit as st
+import Streamlit as st
 
 
 # --- 月齢計算関数 ---
@@ -180,11 +180,13 @@ if "daily" in w_data and "hourly" in w_data:
 
     all_dates = daily_w["time"]
 
-    # 本日（実行日）の日付を取得して起点にする
-    today_dt = datetime.date.today()
-    today_str = today_dt.strftime("%Y-%m-%d")
+    # 日本時間(JST)の今日の日付文字列を取得
+    jst_now = datetime.datetime.now(
+        datetime.timezone(datetime.timedelta(hours=9))
+    )
+    today_str = jst_now.strftime("%Y-%m-%d")
 
-    # 本日以降の7日分に制限
+    # 本日以降の日付のみを正確にフィルタリングして先頭7日分を取得
     dates = [d for d in all_dates if d >= today_str][:7]
 
     # 実気温からの推定水温を算出
