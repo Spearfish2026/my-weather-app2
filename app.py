@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
-import Streamlit as st
+import streamlit as st
 
 
 # --- 月齢計算関数 ---
@@ -247,7 +247,7 @@ if "daily" in w_data and "hourly" in w_data:
                 <p style="text-align:center; font-size:1.1em; margin:8px 0;"><b>{w_icon}</b></p>
                 <hr style="margin:8px 0;">
                 <p style="margin:4px 0;"><b>風:</b> <span style="color:#e65100; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p>
-                <p style="margin:4px 0;">🌡️ <b>水温:</b> {water_temp_str}</p>
+                <p style="margin:4px 0;">🌡️️ <b>水温:</b> {water_temp_str}</p>
                 <p style="margin:4px 0;">🌕 <b>月齢:</b> {moon_8th}</p>
                 <p style="margin:4px 0; font-size:0.85em; color:#d32f2f;">🔺 <b>満潮:</b> {high_tide}</p>
                 <p style="margin:4px 0; font-size:0.85em; color:#1976d2;">🔻 <b>干潮:</b> {low_tide}</p>
