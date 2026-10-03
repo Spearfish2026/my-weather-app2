@@ -337,7 +337,7 @@ if "daily" in w_data and "hourly" in w_data:
     tide_data = get_tide_series(sel_dt, lon)
     df_selected["tide"] = tide_data
 
-   # 風速＆潮位グラフ
+  # 風速＆潮位グラフ
     fig_wind = make_subplots(specs=[[{"secondary_y": True}]])
 
     fig_wind.add_trace(
@@ -400,19 +400,32 @@ if "daily" in w_data and "hourly" in w_data:
         ),
         margin=dict(l=10, r=10, t=50, b=80),
         height=420,
+        # ダブルクリック時のリセット挙動を確実に設定
+        uirevision=selected_date_str,
     )
-    fig_wind.update_xaxes(gridcolor="#333333", zerolinecolor="#333333")
+
+    # 軸のレンジを毎回自動スケール（固定化を解除）
+    fig_wind.update_xaxes(
+        gridcolor="#333333", zerolinecolor="#333333", autorange=True
+    )
     fig_wind.update_yaxes(
         title_text="風速 (m/s)",
         secondary_y=False,
         gridcolor="#333333",
         zerolinecolor="#333333",
+        autorange=True,
     )
     fig_wind.update_yaxes(
-        title_text="潮位 (相対cm)", secondary_y=True, showgrid=False
+        title_text="潮位 (相対cm)",
+        secondary_y=True,
+        showgrid=False,
+        autorange=True,
     )
 
-    st.plotly_chart(fig_wind, use_container_width=True)
+    # 日付ごとの一意なkeyを渡すことで、日付切替時にコンポーネントを完全再描画させる
+    st.plotly_chart(
+        fig_wind, use_container_width=True, key=f"wind_chart_{selected_date_str}"
+    )
 
     # 波高＆波向グラフ
     fig_wave = go.Figure()
@@ -450,7 +463,10 @@ if "daily" in w_data and "hourly" in w_data:
 
     fig_wave.update_layout(
         title=dict(
-            text=title_wave, x=0, xanchor="left", font=dict(size=14, color="#ffffff")
+            text=title_wave,
+            x=0,
+            xanchor="left",
+            font=dict(size=14, color="#ffffff"),
         ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -468,11 +484,19 @@ if "daily" in w_data and "hourly" in w_data:
         ),
         margin=dict(l=10, r=10, t=50, b=80),
         height=390,
+        uirevision=selected_date_str,
     )
-    fig_wave.update_xaxes(gridcolor="#333333", zerolinecolor="#333333")
-    fig_wave.update_yaxes(gridcolor="#333333", zerolinecolor="#333333")
 
-    st.plotly_chart(fig_wave, use_container_width=True)
+    fig_wave.update_xaxes(
+        gridcolor="#333333", zerolinecolor="#333333", autorange=True
+    )
+    fig_wave.update_yaxes(
+        gridcolor="#333333", zerolinecolor="#333333", autorange=True
+    )
+
+    st.plotly_chart(
+        fig_wave, use_container_width=True, key=f"wave_chart_{selected_date_str}"
+    )
 
 else:
     st.error("データの取得に失敗しました。")
