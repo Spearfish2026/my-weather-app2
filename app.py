@@ -8,7 +8,7 @@ import requests
 import streamlit as st
 
 
-# --- 月齢計算関数 ---
+# --- 月齢＆潮名計算関数 ---
 def get_moon_phase(date_obj):
     if isinstance(date_obj, datetime.date) and not isinstance(
         date_obj, datetime.datetime
@@ -21,6 +21,21 @@ def get_moon_phase(date_obj):
     age = diff % synodic_month
     phase_num = int((age / synodic_month) * 8) % 8 + 1
     return f"{phase_num}/8", float(age)
+
+
+def get_tide_name(age):
+    """月齢から潮名を判定"""
+    if (0 <= age < 3.0) or (13.8 <= age < 17.8) or (28.5 <= age):
+        return "大潮"
+    elif (3.0 <= age < 6.8) or (17.8 <= age < 21.6):
+        return "中潮"
+    elif (6.8 <= age < 9.8) or (21.6 <= age < 24.6):
+        return "小潮"
+    elif (9.8 <= age < 10.8) or (24.6 <= age < 25.6):
+        return "長潮"
+    elif (10.8 <= age < 13.8) or (25.6 <= age < 28.5):
+        return "若潮"
+    return "中潮"
 
 
 # --- 簡易潮汐計算関数 ---
@@ -72,7 +87,7 @@ def weather_code_to_icon(code):
     elif code in [1, 2]:
         return "🌤 晴れ/時々曇り"
     elif code in [3]:
-        return "☁️ 曇り"
+        return "☁️️ 曇り"
     elif code in [45, 48]:
         return "🌫️ 霧"
     elif code in [51, 53, 55, 61, 63, 65, 80, 81, 82]:
@@ -236,7 +251,8 @@ if "daily" in w_data and "hourly" in w_data:
                 f"{round(daily_m['sea_water_temperature_max'][orig_idx], 1)}℃"
             )
 
-        moon_8th, _ = get_moon_phase(dt)
+        moon_8th, m_age = get_moon_phase(dt)
+        tide_name = get_tide_name(m_age)
         high_tide, low_tide = get_tide_times(dt, lon)
 
         with cols[idx]:
@@ -247,8 +263,8 @@ if "daily" in w_data and "hourly" in w_data:
                 <p style="text-align:center; font-size:1.1em; margin:8px 0;"><b>{w_icon}</b></p>
                 <hr style="margin:8px 0;">
                 <p style="margin:4px 0;"><b>風:</b> <span style="color:#e65100; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p>
-                <p style="margin:4px 0;">🌡️️ <b>水温:</b> {water_temp_str}</p>
-                <p style="margin:4px 0;">🌕 <b>月齢:</b> {moon_8th}</p>
+                <p style="margin:4px 0;">🌡 <b>水温:</b> {water_temp_str}</p>
+                <p style="margin:4px 0;">🌕 <b>月齢:</b> {moon_8th} <span style="background-color:#e1f5fe; color:#0288d1; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:0.85em;">{tide_name}</span></p>
                 <p style="margin:4px 0; font-size:0.85em; color:#d32f2f;">🔺 <b>満潮:</b> {high_tide}</p>
                 <p style="margin:4px 0; font-size:0.85em; color:#1976d2;">🔻 <b>干潮:</b> {low_tide}</p>
             </div>
