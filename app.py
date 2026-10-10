@@ -1,4 +1,6 @@
 import datetime
+import json
+import os
 import math
 import ephem
 import pandas as pd
@@ -6,6 +8,34 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
 import streamlit as st
+
+
+# --- プリセットの読み込み・保存用ファイル ---
+PRESET_FILE = "presets.json"
+
+def load_presets():
+    default_presets = {
+        "出雲 (Izumo)": [35.36, 132.75],
+        "猪目 (Inome)": [35.44, 132.71],
+        "十六島 (Uppurui)": [35.46, 132.81],
+        "鵜峠 (Udo)": [35.46, 132.75],
+        "日御碕 (Hinomisaki)": [35.43, 132.63],
+        "境港 (Sakaiminato)": [35.54, 133.23],
+    }
+    if os.path.exists(PRESET_FILE):
+        try:
+            with open(PRESET_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return default_presets
+    return default_presets
+
+def save_presets(presets_dict):
+    try:
+        with open(PRESET_FILE, "w", encoding="utf-8") as f:
+            json.dump(presets_dict, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        st.sidebar.error(f"プリセットの保存に失敗しました: {e}")
 
 
 # --- 月齢＆潮名計算関数 ---
@@ -141,24 +171,26 @@ st.set_page_config(
     page_title="天気予報＆海況ダッシュボード", layout="wide", page_icon="🎣"
 )
 
-# セッション状態の初期化（カスタムプリセット保持用）
-if "custom_presets" not in st.session_state:
-    st.session_state["custom_presets"] = {
-        "出雲 (Izumo)": (35.36, 132.75),
-        "猪目 (Inome)": (35.44, 132.71),
-        "十六島 (Uppurui)": (35.46, 132.81),
-        "鵜峠 (Udo)": (35.46, 132.75),
-        "日御碕 (Hinomisaki)": (35.43, 132.63),
-        "境港 (Sakaiminato)": (35.54, 133.23),
-    }
+# セッション状態の初期化（JSONからプリセットをロード）
+if "presets" not in st.session_state:
+    st.session_state["presets"] = load_presets()
+
+if "current_lat" not in st.session_state:
+    st.session_state["current_lat"] = 35.36
+if "current_lon" not in st.session_state:
+    st.session_state["current_lon"] = 132.75
 
 # サイドバー設定
 st.sidebar.header("📍 参照位置の設定")
 
-preset_choice = st.sidebar.selectbox(
-    "プリセットから選択", list(st.session_state["custom_presets"].keys())
-)
-default_lat, default_lon = st.session_state["custom_presets"][preset_choice]
+preset_names = list(st.session_state["presets"].keys())
+preset_choice = st.sidebar.selectbox("プリセットから選択", preset_names)
+
+# プリセットが選択されたら座標を更新
+if preset_choice:
+    coords = st.session_state["presets"][preset_choice]
+    st.session_state["current_lat"] = coords[0]
+    st.session_state["current_lon"] = coords[1]
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔍 地名・スポット名で検索")
@@ -167,7 +199,8 @@ search_query = st.sidebar.text_input("地名を入力（例: 松江, 大社）")
 if search_query:
     s_lat, s_lon, s_name = geocode_location(search_query)
     if s_lat is not None:
-        default_lat, default_lon = s_lat, s_lon
+        st.session_state["current_lat"] = s_lat
+        st.session_state["current_lon"] = s_lon
         st.sidebar.success(f"「{s_name}」の位置を取得しました")
     else:
         st.sidebar.error("該当する場所が見つかりませんでした")
@@ -180,13 +213,12 @@ coord_paste = st.sidebar.text_input(
     help="Googleマップでコピーした数値をそのまま貼り付けてください",
 )
 
-# ペースト入力がある場合は優先して分解
 if coord_paste:
     try:
         parts = coord_paste.replace(" ", "").split(",")
         if len(parts) == 2:
-            default_lat = float(parts[0])
-            default_lon = float(parts[1])
+            st.session_state["current_lat"] = float(parts[0])
+            st.session_state["current_lon"] = float(parts[1])
             st.sidebar.success("座標を正常に読み込みました")
         else:
             st.sidebar.error("「緯度, 経度」の形式で入力してください")
@@ -196,13 +228,17 @@ if coord_paste:
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ 座標直接調整")
 lat = st.sidebar.number_input(
-    "緯度 (Latitude)", value=float(default_lat), format="%.6f"
+    "緯度 (Latitude)", value=float(st.session_state["current_lat"]), format="%.6f", key="input_lat"
 )
 lon = st.sidebar.number_input(
-    "経度 (Longitude)", value=float(default_lon), format="%.6f"
+    "経度 (Longitude)", value=float(st.session_state["current_lon"]), format="%.6f", key="input_lon"
 )
 
-# 現在の設定位置をカスタムプリセットとして保存する機能
+# 直接調整された場合もセッションに反映
+st.session_state["current_lat"] = lat
+st.session_state["current_lon"] = lon
+
+# 現在の設定位置をカスタムプリセットとして追加・JSONへ保存する機能
 st.sidebar.markdown("---")
 st.sidebar.subheader("💾 現在地をプリセットに追加")
 new_preset_name = st.sidebar.text_input(
@@ -210,10 +246,10 @@ new_preset_name = st.sidebar.text_input(
 )
 if st.sidebar.button("この場所をプリセットに保存"):
     if new_preset_name:
-        st.session_state["custom_presets"][new_preset_name] = (lat, lon)
-        st.sidebar.success(
-            f"「{new_preset_name}」をプリセットに追加しました！上のプルダウンから選択できます。"
-        )
+        st.session_state["presets"][new_preset_name] = [lat, lon]
+        save_presets(st.session_state["presets"])
+        st.sidebar.success(f"「{new_preset_name}」をプリセットに保存しました！")
+        st.experimental_rerun() if hasattr(st, "experimental_rerun") else st.rerun()
     else:
         st.sidebar.warning("登録名を入力してください。")
 
