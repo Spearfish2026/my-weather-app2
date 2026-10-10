@@ -108,14 +108,13 @@ def estimate_water_temp(daily_temp_max):
         return None
 
     avg_temp = sum(valid_temps) / len(valid_temps)
-    # 日本海沿岸（島根）の水温応答モデル（気温に対し緩やかに追従）
     estimated_temp = 12.0 + (avg_temp - 5.0) * 0.65
     return round(max(8.0, min(29.0, estimated_temp)), 1)
 
 
 # --- APIから気象＆海洋データ取得 ---
 def fetch_weather_and_marine_data(lat, lon):
-    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weather_code,temperature_2m_max,wind_speed_10m_max,wind_direction_10m_dominant&hourly=wind_speed_10m,wind_direction_10m&past_days=3&timezone=Asia%2FTokyo"
+    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max,wind_direction_10m_dominant&hourly=temperature_2m,wind_speed_10m,wind_direction_10m&past_days=3&timezone=Asia%2FTokyo"
     weather_res = requests.get(weather_url).json()
 
     marine_url = f"https://marine-api.open-meteo.com/v1/marine?latitude={lat}&longitude={lon}&daily=sea_water_temperature_max,wave_height_max&hourly=wave_height,wave_direction&timezone=Asia%2FTokyo"
@@ -254,6 +253,13 @@ if "daily" in w_data and "hourly" in w_data:
 
         w_code = daily_w["weather_code"][orig_idx]
         w_icon = weather_code_to_icon(w_code)
+        
+        # 最高・最低気温の取得
+        t_max = daily_w["temperature_2m_max"][orig_idx]
+        t_min = daily_w["temperature_2m_min"][orig_idx]
+        t_max_str = f"{round(t_max, 1)}℃" if t_max is not None else "--℃"
+        t_min_str = f"{round(t_min, 1)}℃" if t_min is not None else "--℃"
+
         w_speed = round(daily_w["wind_speed_10m_max"][orig_idx] / 3.6, 1)
         w_deg = daily_w["wind_direction_10m_dominant"][orig_idx]
         w_arrow = degree_to_arrow(w_deg)
@@ -273,7 +279,7 @@ if "daily" in w_data and "hourly" in w_data:
         tide_name = get_tide_name(m_age)
         high_tide, low_tide = get_tide_times(dt, lon)
 
-        card = f'<div class="metric-card-scroll"><h4 style="margin:0; text-align:center; color:#0277bd !important; font-size:1.05em; font-weight:bold;">{display_date}</h4><p style="text-align:center; font-size:1em; margin:6px 0; color:#222222 !important;"><b>{w_icon}</b></p><hr style="margin:6px 0; border-color:#eee;"><p style="margin:4px 0; font-size:0.85em; color:#222222 !important;"><b>風:</b> <span style="color:#e65100 !important; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p><p style="margin:4px 0; font-size:0.85em; color:#222222 !important;">🌡 <b>水温:</b> {water_temp_str}</p><p style="margin:4px 0; font-size:0.85em; color:#222222 !important;">🌕 <b>月齢:</b> {moon_8th} <span style="background-color:#0288d1; color:#ffffff !important; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:0.8em;">{tide_name}</span></p><p style="margin:4px 0; font-size:0.82em; color:#c62828 !important;">🔺 <b>満潮:</b> {high_tide}</p><p style="margin:4px 0; font-size:0.82em; color:#1565c0 !important;">🔻 <b>干潮:</b> {low_tide}</p></div>'
+        card = f'<div class="metric-card-scroll"><h4 style="margin:0; text-align:center; color:#0277bd !important; font-size:1.05em; font-weight:bold;">{display_date}</h4><p style="text-align:center; font-size:1em; margin:6px 0; color:#222222 !important;"><b>{w_icon}</b></p><p style="text-align:center; font-size:0.85em; margin:2px 0; color:#222222 !important;"><span style="color:#c62828;">最高 {t_max_str}</span> / <span style="color:#1565c0;">最低 {t_min_str}</span></p><hr style="margin:6px 0; border-color:#eee;"><p style="margin:4px 0; font-size:0.85em; color:#222222 !important;"><b>風:</b> <span style="color:#e65100 !important; font-weight:bold;">{w_arrow}</span> {w_speed} m/s</p><p style="margin:4px 0; font-size:0.85em; color:#222222 !important;">🌡 <b>水温:</b> {water_temp_str}</p><p style="margin:4px 0; font-size:0.85em; color:#222222 !important;">🌕 <b>月齢:</b> {moon_8th} <span style="background-color:#0288d1; color:#ffffff !important; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:0.8em;">{tide_name}</span></p><p style="margin:4px 0; font-size:0.82em; color:#c62828 !important;">🔺 <b>満潮:</b> {high_tide}</p><p style="margin:4px 0; font-size:0.82em; color:#1565c0 !important;">🔻 <b>干潮:</b> {low_tide}</p></div>'
         cards_html.append(card)
 
     scroll_html = f'<div class="horizontal-scroll-container">{"".join(cards_html)}</div>'
@@ -282,7 +288,7 @@ if "daily" in w_data and "hourly" in w_data:
     st.divider()
 
     # 下段：選択日の時間軸グラフ
-    st.subheader("📊 時間軸での詳細（風・潮位・波）")
+    st.subheader("📊 時間軸での詳細（風・潮位・波・気温）")
 
     selected_date_str = st.selectbox(
         "確認したい日付を選択してください",
@@ -299,10 +305,12 @@ if "daily" in w_data and "hourly" in w_data:
     wave_d_list = hourly_m.get(
         "wave_direction", [None] * len(hourly_w["time"])
     )
+    temp_h_list = hourly_w.get("temperature_2m", [None] * len(hourly_w["time"]))
 
     df_hourly = pd.DataFrame(
         {
             "time": hourly_w["time"],
+            "temperature": temp_h_list,
             "wind_speed": [
                 round(s / 3.6, 1) for s in hourly_w["wind_speed_10m"]
             ],
@@ -418,24 +426,38 @@ if "daily" in w_data and "hourly" in w_data:
         config={"displayModeBar": False, "scrollZoom": False},
     )
 
-    # --- グラフ2: 波高＆波向 ---
+    # --- グラフ2: 波高＆気温（2軸グラフ） ---
     title_wave = (
-        f"🌊 {sel_dt.strftime('%m/%d')} の波高・波向推移（上部矢印：波向）"
+        f"🌊 {sel_dt.strftime('%m/%d')} の波高・気温推移（上部矢印：波向）"
     )
     if is_wave_estimated:
-        title_wave += " ※風速からの推定表示"
+        title_wave += " ※波高は風速からの推定"
     st.markdown(f"##### {title_wave}")
 
-    fig_wave = go.Figure()
+    fig_wave = make_subplots(specs=[[{"secondary_y": True}]])
 
+    # 波高（棒グラフ：左軸）
     fig_wave.add_trace(
         go.Bar(
             x=df_selected["hour"],
             y=df_selected["wave_height"],
             name="波高 (m)" if not is_wave_estimated else "波高 (推定 m)",
             marker_color="#17becf",
-            opacity=0.85,
-        )
+            opacity=0.75,
+        ),
+        secondary_y=False,
+    )
+
+    # 気温（折れ線グラフ：右軸）
+    fig_wave.add_trace(
+        go.Scatter(
+            x=df_selected["hour"],
+            y=df_selected["temperature"],
+            name="気温 (℃)",
+            line=dict(color="#ff9800", width=3),
+            mode="lines+markers",
+        ),
+        secondary_y=True,
     )
 
     max_wave = max(df_selected["wave_height"])
@@ -450,7 +472,7 @@ if "daily" in w_data and "hourly" in w_data:
             showarrow=False,
             font=dict(size=16, color="#ff7f0e"),
             xref="x",
-            yref="y",
+            yref="y1",
         )
 
     fig_wave.update_layout(
@@ -463,18 +485,25 @@ if "daily" in w_data and "hourly" in w_data:
             zerolinecolor="#333333",
             fixedrange=True,
         ),
-        yaxis=dict(
-            title="波高 (m)",
-            gridcolor="#333333",
-            zerolinecolor="#333333",
-            fixedrange=True,
-        ),
         hovermode="x unified",
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
         ),
         margin=dict(l=10, r=10, t=30, b=20),
-        height=320,
+        height=340,
+    )
+    fig_wave.update_yaxes(
+        title_text="波高 (m)",
+        secondary_y=False,
+        gridcolor="#333333",
+        zerolinecolor="#333333",
+        fixedrange=True,
+    )
+    fig_wave.update_yaxes(
+        title_text="気温 (℃)",
+        secondary_y=True,
+        showgrid=False,
+        fixedrange=True,
     )
 
     st.plotly_chart(
