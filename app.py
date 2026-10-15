@@ -38,28 +38,33 @@ def save_presets(presets_dict):
         st.sidebar.error(f"プリセットの保存に失敗しました: {e}")
 
 
-# --- 月齢＆潮名計算関数 ---
+# --- 月齢＆潮名計算関数（女神転生風 0/8〜8/8 方式） ---
 def get_moon_phase(date_obj):
     if isinstance(date_obj, datetime.date) and not isinstance(
         date_obj, datetime.datetime
     ):
         date_obj = datetime.datetime.combine(date_obj, datetime.time(12, 0))
 
-    # PyEphemを使用して正確な月齢を計算
     d = ephem.Date(date_obj)
     prev_nm = ephem.previous_new_moon(d)
-    age = float(d - prev_nm)  # 新月からの経過日数を正確に算出 (0.0 〜 約29.53)
+    age = float(d - prev_nm)  # 新月からの経過日数 (0.0 〜 約29.53)
 
-    # 29.53058882日を8分割（1段階あたり約3.69日）して 0〜7 のインデックスにする
     synodic_month = 29.53058882
-    # 0/8 を新月、4/8 を満月とする表現にするため、四捨五入して0〜7に収める
-    phase_idx = round((age / synodic_month) * 8) % 8
     
-    # 表示を 0/8 〜 7/8 （あるいは 1/8 〜 8/8）に調整
-    # 新月を 0/8（または8/8）としてきれいに循環させます
-    display_num = 8 if phase_idx == 0 else phase_idx
+    # 0.0が新月、14.76が満月。
+    # 女神転生風に「新月=0/8、満月=8/8」として滑らかに周期させる計算
+    # 満月（age ≒ 14.76）のときに 8/8（または4/8をピークにした三角波・余弦波の位相変換）になるようにします。
+    # ここでは月の満ち欠けのサイクル（余弦波を使って新月0、満月8、新月0にするモデル）を適用します。
+    # phase = 4 * (1 - math.cos(2 * math.pi * age / synodic_month)) -> これだと0〜8になり、新月0、満月8になります。
     
-    return f"{display_num}/8", float(age)
+    val = 4.0 * (1.0 - math.cos(2.0 * math.pi * age / synodic_month))
+    phase_num = round(val)
+    if phase_num > 8:
+        phase_num = 8
+    if phase_num < 0:
+        phase_num = 0
+
+    return f"{phase_num}/8", float(round(age, 1))
 
 
 def get_tide_name(age):
