@@ -45,12 +45,21 @@ def get_moon_phase(date_obj):
     ):
         date_obj = datetime.datetime.combine(date_obj, datetime.time(12, 0))
 
-    ref_date = datetime.datetime(2000, 1, 6, 18, 14)
-    diff = (date_obj - ref_date).total_seconds() / 86400.0
+    # PyEphemを使用して正確な月齢を計算
+    d = ephem.Date(date_obj)
+    prev_nm = ephem.previous_new_moon(d)
+    age = float(d - prev_nm)  # 新月からの経過日数を正確に算出 (0.0 〜 約29.53)
+
+    # 29.53058882日を8分割（1段階あたり約3.69日）して 0〜7 のインデックスにする
     synodic_month = 29.53058882
-    age = diff % synodic_month
-    phase_num = int((age / synodic_month) * 8) % 8 + 1
-    return f"{phase_num}/8", float(age)
+    # 0/8 を新月、4/8 を満月とする表現にするため、四捨五入して0〜7に収める
+    phase_idx = round((age / synodic_month) * 8) % 8
+    
+    # 表示を 0/8 〜 7/8 （あるいは 1/8 〜 8/8）に調整
+    # 新月を 0/8（または8/8）としてきれいに循環させます
+    display_num = 8 if phase_idx == 0 else phase_idx
+    
+    return f"{display_num}/8", float(age)
 
 
 def get_tide_name(age):
